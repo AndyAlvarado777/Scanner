@@ -5,7 +5,6 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Environment;
-import android.text.InputType;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -23,6 +22,8 @@ import com.honeywell.aidc.*;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap; // Para mantener el orden de inserción de escaneos únicos
 
 import jxl.Workbook;
 import jxl.WorkbookSettings;
@@ -33,28 +34,32 @@ import jxl.write.WriteException;
 
 public class MainActivity extends AppCompatActivity {
 
-    private ScrollView scrollView;
     private static final String TAG = "HoneywellScanner";
     private static final int PERMISSION_REQUEST_CODE = 123;
 
     private LinearLayout scanContainer;
     private Button btnExportar;
-    private EditText editCodigoViaje;
-    private EditText editCodigoDespachador;
-    private EditText editCodigoTransportista;
-    private String codigoDespachador = "";
-    private String codigoTransportista = "";
+    private Button btnClearFields; // Declaración del nuevo botón
+    private TextInputEditText editCodigoViaje; // Usar TextInputEditText para consistencia
+    private TextInputEditText editCodigoDespachador; // Usar TextInputEditText para consistencia
+    private TextInputEditText editCodigoTransportista; // Usar TextInputEditText para consistencia
+
+    private TextView tvProductosCount; // Declaración del TextView para el contador de productos
+    private TextView tvCantidadTotal;  // Declaración del TextView para el contador de cantidad total
 
     private AidcManager manager;
     private BarcodeReader barcodeReader;
 
-    private List<Escaneo> listaEscaneos = new ArrayList<>();
+    // Usaremos un Map para gestionar los escaneos. Si un código se escanea de nuevo,
+    // actualizamos su cantidad en lugar de añadir un nuevo ítem en la UI.
+    // La clave será el código de barras, el valor será la vista del ítem escaneado.
+    private Map<String, View> scannedItemViews = new LinkedHashMap<>();
 
     private static class Escaneo {
         String codigoBarra;
-        String cantidad;
+        int cantidad; // Cambiado a int para facilitar cálculos
 
-        Escaneo(String codigoBarra, String cantidad) {
+        Escaneo(String codigoBarra, int cantidad) {
             this.codigoBarra = codigoBarra;
             this.cantidad = cantidad;
         }
@@ -65,13 +70,21 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // Inicializar vistas
         scanContainer = findViewById(R.id.scanContainer);
         btnExportar = findViewById(R.id.btnExportar);
+        btnClearFields = findViewById(R.id.btnClearFields); // ¡IMPORTANTE: Inicializar el nuevo botón!
+
+        // Usar TextInputEditText directamente para los EditTexts
         editCodigoViaje = findViewById(R.id.editCodigoViaje);
         editCodigoDespachador = findViewById(R.id.editCodigoDespachador);
         editCodigoTransportista = findViewById(R.id.editCodigoTransportista);
 
+        // ¡IMPORTANTE: Inicializar los TextViews de los contadores!
+        tvProductosCount = findViewById(R.id.tv_productos_count);
+        tvCantidadTotal = findViewById(R.id.tv_cantidad_total);
 
+        // Establecer listeners
         btnExportar.setOnClickListener(v -> {
             if (checkPermission()) {
                 exportarExcel();
@@ -80,6 +93,12 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // Listener para el nuevo botón de limpiar campos
+        btnClearFields.setOnClickListener(v -> {
+            limpiarCampos();
+        });
+
+
         AidcManager.create(this, new AidcManager.CreatedCallback() {
             @Override
             public void onCreated(AidcManager aidcManager) {
@@ -87,7 +106,9 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     barcodeReader = manager.createBarcodeReader();
                 } catch (InvalidScannerNameException e) {
-                    throw new RuntimeException(e);
+                    Log.e(TAG, "Error al crear BarcodeReader: " + e.getMessage());
+                    Toast.makeText(MainActivity.this, "Error al inicializar el escáner.", Toast.LENGTH_SHORT).show();
+                    return; // Importante para evitar NullPointerException si barcodeReader es null
                 }
 
                 if (barcodeReader != null) {
@@ -96,12 +117,16 @@ public class MainActivity extends AppCompatActivity {
                                 BarcodeReader.TRIGGER_CONTROL_MODE_AUTO_CONTROL);
                         barcodeReader.addBarcodeListener(barcodeListener);
                         barcodeReader.claim();
-                    } catch (Exception e) {
+                    } catch (UnsupportedPropertyException | ScannerUnavailableException e) {
                         Log.e(TAG, "Error inicializando lector: " + e.getMessage());
+                        Toast.makeText(MainActivity.this, "Error al configurar el escáner.", Toast.LENGTH_SHORT).show();
                     }
                 }
             }
         });
+
+        // Actualizar contadores al inicio (deberían ser 0)
+        updateCounters();
     }
 
     private final BarcodeReader.BarcodeListener barcodeListener = new BarcodeReader.BarcodeListener() {
@@ -113,92 +138,137 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onFailureEvent(BarcodeFailureEvent event) {
             Log.e(TAG, "Falló el escaneo");
+            runOnUiThread(() -> Toast.makeText(MainActivity.this, "Error de escaneo", Toast.LENGTH_SHORT).show());
         }
     };
 
-
     private void agregarBloqueEscaneo(String data) {
-        // 1. Obtener el LayoutInflater para poder "inflar" el layout XML en un objeto View.
-        LayoutInflater inflater = LayoutInflater.from(this);
-
-        // 2. Inflar el layout. El último parámetro 'false' es importante para que
-        //    el sistema no lo agregue al 'scanContainer' todavía. Lo haremos manualmente.
-        View itemView = inflater.inflate(R.layout.item_scan, scanContainer, false);
-
-        // 3. Encontrar las vistas DENTRO del layout que acabamos de inflar.
-        TextView codigoTexto = itemView.findViewById(R.id.tv_scan_data);
-        TextInputEditText cantidadInput = itemView.findViewById(R.id.et_quantity);
-
-        // 4. Configurar los datos y los listeners en las vistas.
-        codigoTexto.setText(data);
-
-        cantidadInput.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                // Ocultar el teclado cuando el usuario presiona "Hecho"
-                cantidadInput.clearFocus();
-                InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                if (imm != null) {
-                    imm.hideSoftInputFromWindow(cantidadInput.getWindowToken(), 0);
+        // Implementación de manejo de escaneos duplicados (mejora de UX)
+        if (scannedItemViews.containsKey(data)) {
+            // El código ya existe, actualiza su cantidad
+            View existingItemView = scannedItemViews.get(data);
+            TextInputEditText cantidadInput = existingItemView.findViewById(R.id.et_quantity);
+            if (cantidadInput != null) {
+                try {
+                    int currentQuantity = Integer.parseInt(cantidadInput.getText().toString());
+                    cantidadInput.setText(String.valueOf(currentQuantity + 1)); // Incrementa en 1
+                    cantidadInput.requestFocus(); // Pone el foco en el campo actualizado
+                    // Opcional: Vibrar o mostrar un Toast para indicar que se actualizó
+                    Toast.makeText(this, "Cantidad actualizada para: " + data, Toast.LENGTH_SHORT).show();
+                } catch (NumberFormatException e) {
+                    Log.e(TAG, "Error al parsear cantidad existente: " + cantidadInput.getText().toString());
+                    cantidadInput.setText("1"); // Si hay un error, resetea a 1
                 }
-                return true; // Indica que hemos manejado el evento.
             }
-            return false; // No hemos manejado otros eventos.
+        } else {
+            // El código no existe, crea un nuevo ítem
+            LayoutInflater inflater = LayoutInflater.from(this);
+            View newItemView = inflater.inflate(R.layout.item_scan, scanContainer, false);
+
+            TextView tvItemNumber = newItemView.findViewById(R.id.tv_item_number);
+            TextView codigoTexto = newItemView.findViewById(R.id.tv_scan_data);
+            TextInputEditText cantidadInput = newItemView.findViewById(R.id.et_quantity);
+
+            codigoTexto.setText(data);
+            cantidadInput.setText("1"); // Valor por defecto 1
+
+            // Almacena la vista del nuevo ítem en el mapa
+            scannedItemViews.put(data, newItemView);
+
+            cantidadInput.setOnEditorActionListener((v, actionId, event) -> {
+                if (actionId == EditorInfo.IME_ACTION_DONE) {
+                    cantidadInput.clearFocus();
+                    InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                    if (imm != null) {
+                        imm.hideSoftInputFromWindow(cantidadInput.getWindowToken(), 0);
+                    }
+                    updateCounters(); // Actualizar contadores al finalizar la edición de cantidad
+                    return true;
+                }
+                return false;
+            });
+
+            // Listener para cuando el foco cambia y se actualiza la cantidad
+            cantidadInput.setOnFocusChangeListener((v, hasFocus) -> {
+                if (!hasFocus) {
+                    updateCounters(); // Actualiza contadores cuando el campo pierde el foco
+                }
+            });
+
+            scanContainer.addView(newItemView); // Añade el nuevo ítem al final de la lista.
+        }
+
+        // Después de agregar o actualizar, asegurar que el scroll se vaya al final
+        scanContainer.post(() -> {
+            if (scanContainer.getParent() instanceof ScrollView) {
+                ScrollView parentScrollView = (ScrollView) scanContainer.getParent();
+                parentScrollView.fullScroll(View.FOCUS_DOWN);
+            }
         });
 
-        // 5. Agregar la vista completamente configurada al contenedor principal.
-        scanContainer.addView(itemView); // El '0' agrega el nuevo elemento al principio
-
+        updateCounters(); // Siempre actualiza los contadores después de cualquier operación de escaneo
     }
 
-    private void exportarExcel() {
-        // Obtener datos de los campos
-        String codigoViaje = editCodigoViaje.getText().toString().trim();
-        codigoDespachador = editCodigoDespachador.getText().toString().trim();
-        codigoTransportista = editCodigoTransportista.getText().toString().trim();
 
-        // Validación
+    private static final String REMITENTE_EMAIL = "alvaradoandy097@gmail.com";
+    // ¡ADVERTENCIA DE SEGURIDAD! Esto no debería estar aquí. Mover a un lugar más seguro.
+    private static final String REMITENTE_APP_PASSWORD = "wkzp zdrp wnxh gtdq";
+
+    private void exportarExcel() {
+        String codigoViaje = editCodigoViaje.getText().toString().trim();
+        String codigoDespachador = editCodigoDespachador.getText().toString().trim();
+        String codigoTransportista = editCodigoTransportista.getText().toString().trim();
+
         if (codigoViaje.isEmpty() || codigoDespachador.isEmpty() || codigoTransportista.isEmpty()) {
             Toast.makeText(this, "Ingrese todos los datos: viaje, despachador y transportista", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Limpiar lista y recopilar datos de la UI
-        listaEscaneos.clear();
-        for (int i = 0; i < scanContainer.getChildCount(); i++) {
-            View fila = scanContainer.getChildAt(i);
-
+        // Recopila los datos de la UI en una lista temporal primero.
+        List<Escaneo> datosParaExportar = new ArrayList<>();
+        // Ahora iteramos sobre las vistas almacenadas en scannedItemViews para asegurar que reflejamos la UI
+        for (Map.Entry<String, View> entry : scannedItemViews.entrySet()) {
+            View fila = entry.getValue(); // Obtenemos la vista del ítem
             TextView codigoView = fila.findViewById(R.id.tv_scan_data);
-            EditText cantidadView = fila.findViewById(R.id.et_quantity);
+            TextInputEditText cantidadView = fila.findViewById(R.id.et_quantity);
 
             if (codigoView != null && cantidadView != null) {
                 String codigoBarra = codigoView.getText().toString().trim();
-                String cantidad = cantidadView.getText().toString().trim();
+                String cantidadStr = cantidadView.getText().toString().trim();
+                int cantidad = 0;
+                try {
+                    cantidad = Integer.parseInt(cantidadStr);
+                } catch (NumberFormatException e) {
+                    Log.e(TAG, "Cantidad inválida para " + codigoBarra + ": " + cantidadStr);
+                    Toast.makeText(this, "Cantidad inválida en un ítem (" + codigoBarra + "). Revise los datos.", Toast.LENGTH_LONG).show();
+                    return; // Detener exportación si hay datos inválidos
+                }
 
-                if (!cantidad.isEmpty()) {
-                    listaEscaneos.add(new Escaneo(codigoBarra, cantidad));
+                if (cantidad > 0) { // Solo exportar ítems con cantidad > 0
+                    datosParaExportar.add(new Escaneo(codigoBarra, cantidad));
                 }
             }
         }
 
-        if (listaEscaneos.isEmpty()) {
+        if (datosParaExportar.isEmpty()) {
             Toast.makeText(this, "No hay datos para exportar", Toast.LENGTH_SHORT).show();
             return;
         }
 
+        File archivoExcel = null;
         try {
-            WorkbookSettings wbSettings = new WorkbookSettings();
-            wbSettings.setUseTemporaryFileDuringWrite(true);
-
-            File sdCard = Environment.getExternalStorageDirectory();
-            File dir = new File(sdCard.getAbsolutePath() + "/Download/MisExcel");
+            File dir = new File(this.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "MisExcel");
             if (!dir.exists()) {
                 dir.mkdirs();
             }
 
             String fileName = "Escaneos_" + codigoViaje + "_" + System.currentTimeMillis() + ".xls";
-            File file = new File(dir, fileName);
+            archivoExcel = new File(dir, fileName);
 
-            WritableWorkbook workbook = Workbook.createWorkbook(file, wbSettings);
+            WorkbookSettings wbSettings = new WorkbookSettings();
+            wbSettings.setUseTemporaryFileDuringWrite(true);
+
+            WritableWorkbook workbook = Workbook.createWorkbook(archivoExcel, wbSettings);
             WritableSheet sheet = workbook.createSheet("Escaneos", 0);
 
             // Encabezados
@@ -210,27 +280,104 @@ public class MainActivity extends AppCompatActivity {
             sheet.addCell(new Label(5, 0, "Cantidad"));
 
             // Datos
-            for (int i = 0; i < listaEscaneos.size(); i++) {
-                Escaneo escaneo = listaEscaneos.get(i);
+            for (int i = 0; i < datosParaExportar.size(); i++) {
+                Escaneo escaneo = datosParaExportar.get(i);
                 sheet.addCell(new Label(0, i + 1, codigoViaje));
                 sheet.addCell(new Label(1, i + 1, escaneo.codigoBarra));
-                sheet.addCell(new Label(2, i + 1, "00000000000000000000")); // Valor fijo
+                sheet.addCell(new Label(2, i + 1, "00000000000000000000"));
                 sheet.addCell(new Label(3, i + 1, codigoDespachador));
                 sheet.addCell(new Label(4, i + 1, codigoTransportista));
-                sheet.addCell(new Label(5, i + 1, escaneo.cantidad));
+                sheet.addCell(new Label(5, i + 1, String.valueOf(escaneo.cantidad))); // Convertir int a String
             }
 
             workbook.write();
             workbook.close();
 
-            Toast.makeText(this, "Archivo guardado en: " + file.getAbsolutePath(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Archivo guardado en: " + archivoExcel.getAbsolutePath(), Toast.LENGTH_LONG).show();
+
+            String destinatario = "andy.alvarado@pbs.group";
+            String asunto = "Archivo de escaneos para el viaje: " + codigoViaje;
+            String cuerpo = "Adjunto archivo Excel generado por la app. \n\n" +
+                    "Codigo Viaje: " + codigoViaje + "\n" +
+                    "Codigo Despachador: " + codigoDespachador + "\n" +
+                    "Codigo Transportista: " + codigoTransportista;
+
+            MailSender.sendMailWithAttachment(
+                    this,
+                    REMITENTE_EMAIL,
+                    REMITENTE_APP_PASSWORD,
+                    destinatario,
+                    asunto,
+                    cuerpo,
+                    archivoExcel
+            );
+
+            Toast.makeText(this, "Datos exportados y enviados. Limpia los campos si lo deseas.", Toast.LENGTH_LONG).show();
 
         } catch (Exception e) {
-            Log.e(TAG, "Error exportando Excel: " + e.getMessage());
-            Toast.makeText(this, "Error al exportar Excel", Toast.LENGTH_LONG).show();
+            Log.e("ExportarExcel", "Error exportando o enviando Excel", e);
+            Toast.makeText(this, "Error al generar o enviar el archivo: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
+    /**
+     * Nuevo método para limpiar los campos de texto y la lista de escaneos.
+     */
+    private void limpiarCampos() {
+        // Limpiar campos de información del viaje
+        editCodigoViaje.setText("");
+        editCodigoDespachador.setText("");
+        editCodigoTransportista.setText("");
+
+        // Limpiar la lista de escaneos en memoria y en la UI
+        scannedItemViews.clear(); // Limpiar el mapa de vistas
+        scanContainer.removeAllViews(); // Eliminar todas las vistas de escaneo del LinearLayout
+
+        // Actualizar los contadores a cero
+        updateCounters();
+
+        Toast.makeText(this, "Campos limpiados correctamente", Toast.LENGTH_SHORT).show();
+    }
+
+    /**
+     * Actualiza los TextViews de productos y cantidad total.
+     * Recalcula los valores leyendo directamente de las vistas en scanContainer.
+     * Esto asegura que los contadores reflejen el estado actual de la UI,
+     * incluso si la cantidad es modificada manualmente por el usuario.
+     */
+    private void updateCounters() {
+        int totalProductos = scannedItemViews.size(); // Número de ítems únicos
+        int totalCantidad = 0;
+
+        // Iterar sobre las vistas en el scanContainer para obtener las cantidades actuales
+        for (int i = 0; i < scanContainer.getChildCount(); i++) {
+            View itemView = scanContainer.getChildAt(i);
+            TextInputEditText etQuantity = itemView.findViewById(R.id.et_quantity);
+            if (etQuantity != null && !etQuantity.getText().toString().isEmpty()) {
+                try {
+                    totalCantidad += Integer.parseInt(etQuantity.getText().toString());
+                } catch (NumberFormatException e) {
+                    Log.e(TAG, "Error al parsear cantidad: " + etQuantity.getText().toString());
+                    // Si hay un error de formato, podemos considerar la cantidad como 0 o ignorarla
+                    // Podrías mostrar un Toast aquí si prefieres alertar al usuario
+                }
+            }
+
+            // También actualiza el número de orden visible en el ítem (solo si el tvItemNumber existe)
+            TextView tvItemNumber = itemView.findViewById(R.id.tv_item_number);
+            if (tvItemNumber != null) {
+                tvItemNumber.setText(String.valueOf(i + 1));
+            }
+        }
+
+        // Asegúrate de que tvProductosCount y tvCantidadTotal no sean null antes de usarlos
+        if (tvProductosCount != null) {
+            tvProductosCount.setText(String.valueOf(totalProductos));
+        }
+        if (tvCantidadTotal != null) {
+            tvCantidadTotal.setText(String.valueOf(totalCantidad));
+        }
+    }
 
     // Permisos para Android 6+
     private boolean checkPermission() {

@@ -26,6 +26,11 @@ android {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
+    packagingOptions {
+        exclude 'META-INF/NOTICE.md'
+        exclude 'META-INF/LICENSE.md'
+        exclude 'META-INF/DEPENDENCIES'
+    }
 }
 
 dependencies {
@@ -36,6 +41,8 @@ dependencies {
     implementation libs.constraintlayout
     implementation files('libs/DataCollection.aar')
     implementation files('libs/jxl.jar')
+    implementation libs.android.mail
+    implementation libs.android.activation
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
