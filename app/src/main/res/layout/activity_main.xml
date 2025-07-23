@@ -8,12 +8,13 @@
     android:background="#F0F2F5"  android:backgroundTint="#F0F2F5"
     tools:context=".MainActivity">
 
-    <androidx.cardview.widget.CardView
-        android:id="@+id/header_card"
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
         android:layout_width="0dp"
         android:layout_height="?attr/actionBarSize"
-        android:backgroundTint="#424D6F"
-        app:cardElevation="4dp"
+        android:background="#424D6F"
+        android:elevation="4dp"
+        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
@@ -39,13 +40,12 @@
                 android:textColor="#C0C0C0"
                 android:textSize="12sp" />
         </LinearLayout>
-    </androidx.cardview.widget.CardView>
-
+    </androidx.appcompat.widget.Toolbar>
 
     <ScrollView
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintTop_toBottomOf="@id/header_card"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
