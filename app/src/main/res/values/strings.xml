@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Scanner Viajes</string>
+    <string name="eliminar_item">Eliminar item</string>
 </resources>

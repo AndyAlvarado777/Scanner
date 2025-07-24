@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Environment;
+import android.text.TextUtils; // Importar TextUtils
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -37,6 +38,10 @@ import jxl.write.WriteException;
 import android.view.Menu;
 import android.view.MenuItem;
 
+// Importaciones de las nuevas clases SQLite
+import com.example.app.dao.EmailConfigDao;
+import com.example.app.model.EmailConfig;
+
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "HoneywellScanner";
@@ -44,25 +49,23 @@ public class MainActivity extends AppCompatActivity {
 
     private LinearLayout scanContainer;
     private Button btnExportar;
-    private Button btnClearFields; // Declaración del nuevo botón
-    private TextInputEditText editCodigoViaje; // Usar TextInputEditText para consistencia
-    private TextInputEditText editCodigoDespachador; // Usar TextInputEditText para consistencia
-    private TextInputEditText editCodigoTransportista; // Usar TextInputEditText para consistencia
+    private Button btnClearFields;
+    private TextInputEditText editCodigoViaje;
+    private TextInputEditText editCodigoDespachador;
+    private TextInputEditText editCodigoTransportista;
 
-    private TextView tvProductosCount; // Declaración del TextView para el contador de productos
-    private TextView tvCantidadTotal;  // Declaración del TextView para el contador de cantidad total
+    private TextView tvProductosCount;
+    private TextView tvCantidadTotal;
 
     private AidcManager manager;
     private BarcodeReader barcodeReader;
 
-    // Usaremos un Map para gestionar los escaneos. Si un código se escanea de nuevo,
-    // actualizamos su cantidad en lugar de añadir un nuevo ítem en la UI.
-    // La clave será el código de barras, el valor será la vista del ítem escaneado.
-    private Map<String, View> scannedItemViews = new LinkedHashMap<>();
+    private Map<String, View> scannedItemViews = new LinkedHashMap<>(); // Mantener el orden
 
+    // Clase interna para representar un escaneo
     private static class Escaneo {
         String codigoBarra;
-        int cantidad; // Cambiado a int para facilitar cálculos
+        int cantidad;
 
         Escaneo(String codigoBarra, int cantidad) {
             this.codigoBarra = codigoBarra;
@@ -81,14 +84,12 @@ public class MainActivity extends AppCompatActivity {
         // Inicializar vistas
         scanContainer = findViewById(R.id.scanContainer);
         btnExportar = findViewById(R.id.btnExportar);
-        btnClearFields = findViewById(R.id.btnClearFields); // ¡IMPORTANTE: Inicializar el nuevo botón!
+        btnClearFields = findViewById(R.id.btnClearFields);
 
-        // Usar TextInputEditText directamente para los EditTexts
         editCodigoViaje = findViewById(R.id.editCodigoViaje);
         editCodigoDespachador = findViewById(R.id.editCodigoDespachador);
         editCodigoTransportista = findViewById(R.id.editCodigoTransportista);
 
-        // ¡IMPORTANTE: Inicializar los TextViews de los contadores!
         tvProductosCount = findViewById(R.id.tv_productos_count);
         tvCantidadTotal = findViewById(R.id.tv_cantidad_total);
 
@@ -101,12 +102,11 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Listener para el nuevo botón de limpiar campos
         btnClearFields.setOnClickListener(v -> {
             limpiarCampos();
         });
 
-
+        // Configuración del escáner Honeywell
         AidcManager.create(this, new AidcManager.CreatedCallback() {
             @Override
             public void onCreated(AidcManager aidcManager) {
@@ -116,7 +116,7 @@ public class MainActivity extends AppCompatActivity {
                 } catch (InvalidScannerNameException e) {
                     Log.e(TAG, "Error al crear BarcodeReader: " + e.getMessage());
                     Toast.makeText(MainActivity.this, "Error al inicializar el escáner.", Toast.LENGTH_SHORT).show();
-                    return; // Importante para evitar NullPointerException si barcodeReader es null
+                    return;
                 }
 
                 if (barcodeReader != null) {
@@ -133,10 +133,10 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Actualizar contadores al inicio (deberían ser 0)
-        updateCounters();
+        updateCounters(); // Actualizar contadores al inicio (deberían ser 0)
     }
 
+    // Listener para los eventos del lector de códigos de barras
     private final BarcodeReader.BarcodeListener barcodeListener = new BarcodeReader.BarcodeListener() {
         @Override
         public void onBarcodeEvent(final BarcodeReadEvent event) {
@@ -150,30 +150,30 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    // Métodos para el menú de la Toolbar
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        // Infla el menú; esto agrega ítems a la barra de acción si está presente.
         getMenuInflater().inflate(R.menu.main_menu, menu);
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        // Maneja los clics en los ítems del menú.
         int id = item.getItemId();
 
         if (id == R.id.action_settings) {
-            // Navegar a SettingsActivity
             Intent intent = new Intent(this, SettingsActivity.class);
             startActivity(intent);
             return true;
         }
+        // Si tuvieras más ítems en main_menu.xml, los manejarías aquí.
+        // Por ejemplo, R.id.action_trips para la Fase 2
 
         return super.onOptionsItemSelected(item);
     }
 
+    // Método para añadir o actualizar un elemento escaneado en la UI
     private void agregarBloqueEscaneo(String data) {
-        // Implementación de manejo de escaneos duplicados (mejora de UX)
         if (scannedItemViews.containsKey(data)) {
             // El código ya existe, actualiza su cantidad
             View existingItemView = scannedItemViews.get(data);
@@ -181,30 +181,32 @@ public class MainActivity extends AppCompatActivity {
             if (cantidadInput != null) {
                 try {
                     int currentQuantity = Integer.parseInt(cantidadInput.getText().toString());
-                    cantidadInput.setText(String.valueOf(currentQuantity + 1)); // Incrementa en 1
-                    cantidadInput.requestFocus(); // Pone el foco en el campo actualizado
-                    // Opcional: Vibrar o mostrar un Toast para indicar que se actualizó
+                    cantidadInput.setText(String.valueOf(currentQuantity + 1));
+                    cantidadInput.requestFocus();
                     Toast.makeText(this, "Cantidad actualizada para: " + data, Toast.LENGTH_SHORT).show();
                 } catch (NumberFormatException e) {
                     Log.e(TAG, "Error al parsear cantidad existente: " + cantidadInput.getText().toString());
-                    cantidadInput.setText("1"); // Si hay un error, resetea a 1
+                    cantidadInput.setText("1");
                 }
             }
         } else {
             // El código no existe, crea un nuevo ítem
             LayoutInflater inflater = LayoutInflater.from(this);
+            // Asegúrate de que tienes un layout llamado 'item_scan.xml' para cada elemento escaneado
+            // con tv_item_number, tv_scan_data, et_quantity, btn_delete_item
             View newItemView = inflater.inflate(R.layout.item_scan, scanContainer, false);
 
             TextView tvItemNumber = newItemView.findViewById(R.id.tv_item_number);
             TextView codigoTexto = newItemView.findViewById(R.id.tv_scan_data);
             TextInputEditText cantidadInput = newItemView.findViewById(R.id.et_quantity);
+            Button btnEliminar = newItemView.findViewById(R.id.btn_delete_item); // Botón de eliminar en cada ítem
 
             codigoTexto.setText(data);
-            cantidadInput.setText("1"); // Valor por defecto 1
+            cantidadInput.setText("1");
 
-            // Almacena la vista del nuevo ítem en el mapa
-            scannedItemViews.put(data, newItemView);
+            scannedItemViews.put(data, newItemView); // Almacena la vista del nuevo ítem
 
+            // Listener para actualizar cantidad al editar manualmente
             cantidadInput.setOnEditorActionListener((v, actionId, event) -> {
                 if (actionId == EditorInfo.IME_ACTION_DONE) {
                     cantidadInput.clearFocus();
@@ -212,39 +214,59 @@ public class MainActivity extends AppCompatActivity {
                     if (imm != null) {
                         imm.hideSoftInputFromWindow(cantidadInput.getWindowToken(), 0);
                     }
-                    updateCounters(); // Actualizar contadores al finalizar la edición de cantidad
+                    updateCounters();
                     return true;
                 }
                 return false;
             });
 
-            // Listener para cuando el foco cambia y se actualiza la cantidad
             cantidadInput.setOnFocusChangeListener((v, hasFocus) -> {
                 if (!hasFocus) {
-                    updateCounters(); // Actualiza contadores cuando el campo pierde el foco
+                    updateCounters();
                 }
             });
 
-            scanContainer.addView(newItemView); // Añade el nuevo ítem al final de la lista.
+            // Listener para el botón de eliminar por ítem
+            btnEliminar.setOnClickListener(v -> {
+                // Obtener el código de barra asociado a esta vista
+                String codeToDelete = codigoTexto.getText().toString();
+                scannedItemViews.remove(codeToDelete); // Eliminar del mapa
+                scanContainer.removeView(newItemView); // Eliminar de la UI
+                updateCounters(); // Recalcular y actualizar contadores
+                Toast.makeText(this, "Elemento eliminado: " + codeToDelete, Toast.LENGTH_SHORT).show();
+            });
+
+
+            scanContainer.addView(newItemView); // Añade el nuevo ítem al final
         }
 
-        // Después de agregar o actualizar, asegurar que el scroll se vaya al final
+        // Asegurar que el ScrollView se desplace al final
         scanContainer.post(() -> {
-            if (scanContainer.getParent() instanceof ScrollView) {
-                ScrollView parentScrollView = (ScrollView) scanContainer.getParent();
+            View parent = (View) scanContainer.getParent();
+            if (parent instanceof ScrollView) {
+                ScrollView parentScrollView = (ScrollView) parent;
                 parentScrollView.fullScroll(View.FOCUS_DOWN);
             }
         });
 
-        updateCounters(); // Siempre actualiza los contadores después de cualquier operación de escaneo
+        updateCounters(); // Siempre actualiza los contadores
     }
 
-
-    private static final String REMITENTE_EMAIL = "alvaradoandy097@gmail.com";
-    // ¡ADVERTENCIA DE SEGURIDAD! Esto no debería estar aquí. Mover a un lugar más seguro.
-    private static final String REMITENTE_APP_PASSWORD = "wkzp zdrp wnxh gtdq";
-
+    // Método para exportar a Excel y enviar correo
     private void exportarExcel() {
+        // Inicializar el DAO
+        EmailConfigDao emailConfigDao = new EmailConfigDao(this);
+        // Obtener la configuración de correo de la base de datos
+        EmailConfig emailConfig = emailConfigDao.getConfig();
+
+        // Validar si la configuración de correo existe y está completa
+        if (emailConfig == null || TextUtils.isEmpty(emailConfig.getRemitenteEmail()) ||
+                TextUtils.isEmpty(emailConfig.getAppPassword()) ||
+                TextUtils.isEmpty(emailConfig.getDestinatariosEmails())) {
+            Toast.makeText(this, "Error: Por favor, configure el correo en la sección de Configuraciones antes de exportar.", Toast.LENGTH_LONG).show();
+            return; // Detener el proceso si la configuración no existe o está incompleta
+        }
+
         String codigoViaje = editCodigoViaje.getText().toString().trim();
         String codigoDespachador = editCodigoDespachador.getText().toString().trim();
         String codigoTransportista = editCodigoTransportista.getText().toString().trim();
@@ -254,11 +276,10 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // Recopila los datos de la UI en una lista temporal primero.
+        // Recopila los datos de la UI en una lista temporal para la exportación.
         List<Escaneo> datosParaExportar = new ArrayList<>();
-        // Ahora iteramos sobre las vistas almacenadas en scannedItemViews para asegurar que reflejamos la UI
         for (Map.Entry<String, View> entry : scannedItemViews.entrySet()) {
-            View fila = entry.getValue(); // Obtenemos la vista del ítem
+            View fila = entry.getValue();
             TextView codigoView = fila.findViewById(R.id.tv_scan_data);
             TextInputEditText cantidadView = fila.findViewById(R.id.et_quantity);
 
@@ -271,10 +292,10 @@ public class MainActivity extends AppCompatActivity {
                 } catch (NumberFormatException e) {
                     Log.e(TAG, "Cantidad inválida para " + codigoBarra + ": " + cantidadStr);
                     Toast.makeText(this, "Cantidad inválida en un ítem (" + codigoBarra + "). Revise los datos.", Toast.LENGTH_LONG).show();
-                    return; // Detener exportación si hay datos inválidos
+                    return;
                 }
 
-                if (cantidad > 0) { // Solo exportar ítems con cantidad > 0
+                if (cantidad > 0) {
                     datosParaExportar.add(new Escaneo(codigoBarra, cantidad));
                 }
             }
@@ -317,7 +338,7 @@ public class MainActivity extends AppCompatActivity {
                 sheet.addCell(new Label(2, i + 1, "00000000000000000000"));
                 sheet.addCell(new Label(3, i + 1, codigoDespachador));
                 sheet.addCell(new Label(4, i + 1, codigoTransportista));
-                sheet.addCell(new Label(5, i + 1, String.valueOf(escaneo.cantidad))); // Convertir int a String
+                sheet.addCell(new Label(5, i + 1, String.valueOf(escaneo.cantidad)));
             }
 
             workbook.write();
@@ -325,7 +346,11 @@ public class MainActivity extends AppCompatActivity {
 
             Toast.makeText(this, "Archivo guardado en: " + archivoExcel.getAbsolutePath(), Toast.LENGTH_LONG).show();
 
-            String destinatario = "andy.alvarado@pbs.group";
+            // Usar los valores obtenidos de la base de datos
+            String remitenteEmail = emailConfig.getRemitenteEmail();
+            String appPassword = emailConfig.getAppPassword();
+            String destinatarios = emailConfig.getDestinatariosEmails(); // Esto puede ser una cadena con múltiples correos
+
             String asunto = "Archivo de escaneos para el viaje: " + codigoViaje;
             String cuerpo = "Adjunto archivo Excel generado por la app. \n\n" +
                     "Codigo Viaje: " + codigoViaje + "\n" +
@@ -334,9 +359,9 @@ public class MainActivity extends AppCompatActivity {
 
             MailSender.sendMailWithAttachment(
                     this,
-                    REMITENTE_EMAIL,
-                    REMITENTE_APP_PASSWORD,
-                    destinatario,
+                    remitenteEmail,
+                    appPassword,
+                    destinatarios, // Se pasa el String completo, MailSender debe parsearlo si hay múltiples
                     asunto,
                     cuerpo,
                     archivoExcel
@@ -354,16 +379,13 @@ public class MainActivity extends AppCompatActivity {
      * Nuevo método para limpiar los campos de texto y la lista de escaneos.
      */
     private void limpiarCampos() {
-        // Limpiar campos de información del viaje
         editCodigoViaje.setText("");
         editCodigoDespachador.setText("");
         editCodigoTransportista.setText("");
 
-        // Limpiar la lista de escaneos en memoria y en la UI
-        scannedItemViews.clear(); // Limpiar el mapa de vistas
-        scanContainer.removeAllViews(); // Eliminar todas las vistas de escaneo del LinearLayout
+        scannedItemViews.clear();
+        scanContainer.removeAllViews();
 
-        // Actualizar los contadores a cero
         updateCounters();
 
         Toast.makeText(this, "Campos limpiados correctamente", Toast.LENGTH_SHORT).show();
@@ -372,14 +394,11 @@ public class MainActivity extends AppCompatActivity {
     /**
      * Actualiza los TextViews de productos y cantidad total.
      * Recalcula los valores leyendo directamente de las vistas en scanContainer.
-     * Esto asegura que los contadores reflejen el estado actual de la UI,
-     * incluso si la cantidad es modificada manualmente por el usuario.
      */
     private void updateCounters() {
-        int totalProductos = scannedItemViews.size(); // Número de ítems únicos
+        int totalProductos = scannedItemViews.size();
         int totalCantidad = 0;
 
-        // Iterar sobre las vistas en el scanContainer para obtener las cantidades actuales
         for (int i = 0; i < scanContainer.getChildCount(); i++) {
             View itemView = scanContainer.getChildAt(i);
             TextInputEditText etQuantity = itemView.findViewById(R.id.et_quantity);
@@ -388,19 +407,17 @@ public class MainActivity extends AppCompatActivity {
                     totalCantidad += Integer.parseInt(etQuantity.getText().toString());
                 } catch (NumberFormatException e) {
                     Log.e(TAG, "Error al parsear cantidad: " + etQuantity.getText().toString());
-                    // Si hay un error de formato, podemos considerar la cantidad como 0 o ignorarla
-                    // Podrías mostrar un Toast aquí si prefieres alertar al usuario
+                    // Puedes manejar este error como prefieras, por ejemplo, ignorar esa cantidad
                 }
             }
 
-            // También actualiza el número de orden visible en el ítem (solo si el tvItemNumber existe)
+            // Actualiza el número de orden visible en el ítem
             TextView tvItemNumber = itemView.findViewById(R.id.tv_item_number);
             if (tvItemNumber != null) {
                 tvItemNumber.setText(String.valueOf(i + 1));
             }
         }
 
-        // Asegúrate de que tvProductosCount y tvCantidadTotal no sean null antes de usarlos
         if (tvProductosCount != null) {
             tvProductosCount.setText(String.valueOf(totalProductos));
         }
@@ -446,5 +463,27 @@ public class MainActivity extends AppCompatActivity {
             manager.close();
         }
         super.onDestroy();
+    }
+
+    // Puedes añadir onResume() y onPause() si es necesario para el ciclo de vida del escáner Honeywell
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (barcodeReader != null) {
+            try {
+                barcodeReader.claim(); // Reclamar el escáner cuando la actividad vuelve a estar activa
+            } catch (ScannerUnavailableException e) {
+                Log.e(TAG, "Error al reclamar el escáner en onResume: " + e.getMessage());
+                Toast.makeText(this, "Escáner no disponible.", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (barcodeReader != null) {
+            barcodeReader.release(); // Liberar el escáner cuando la actividad se pausa
+        }
     }
 }
