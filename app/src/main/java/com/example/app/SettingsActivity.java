@@ -2,6 +2,7 @@ package com.example.app;
 
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.util.Log; // Asegúrate de importar Log
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Toast;
@@ -10,27 +11,30 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
-import com.example.app.dao.EmailConfigDao; // Importar el DAO
-import com.example.app.model.EmailConfig; // Importar el Modelo
+import com.example.app.dao.EmailConfigDao;
+import com.example.app.model.EmailConfig;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
 
 public class SettingsActivity extends AppCompatActivity {
 
+    private static final String TAG = "SettingsActivity"; // Define un TAG para los logs
+
     private TextInputEditText editEmailRemitente;
     private TextInputEditText editAppPassword;
     private TextInputEditText editEmailsDestino;
     private MaterialButton btnSaveSettings;
-    private MaterialButton btnClearSettings; // Nuevo botón para borrar/resetear la configuración
+    private MaterialButton btnClearSettings;
 
-    private EmailConfigDao emailConfigDao; // Instancia del DAO
+    private EmailConfigDao emailConfigDao;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
 
-        // 1. Configurar la Toolbar
+        Log.d(TAG, "onCreate: SettingsActivity iniciada.");
+
         Toolbar toolbar = findViewById(R.id.settings_toolbar);
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
@@ -38,32 +42,30 @@ public class SettingsActivity extends AppCompatActivity {
             getSupportActionBar().setDisplayShowHomeEnabled(true);
         }
 
-        // 2. Inicializar el DAO
         emailConfigDao = new EmailConfigDao(this);
 
-        // 3. Inicializar las vistas
+        // *** MUY IMPORTANTE: Inicializar las vistas ANTES de cargar los datos ***
         editEmailRemitente = findViewById(R.id.edit_email_remitente);
         editAppPassword = findViewById(R.id.edit_app_password);
         editEmailsDestino = findViewById(R.id.edit_emails_destino);
         btnSaveSettings = findViewById(R.id.btn_save_settings);
-        // btnClearSettings = findViewById(R.id.btn_clear_settings); // Descomentar cuando agregues el botón en XML
+        // btnClearSettings = findViewById(R.id.btn_clear_settings); // Descomentar si usas el botón
 
-        // 4. Cargar la configuración actual desde la base de datos
+        // Cargar la configuración actual
         loadSettings();
 
-        // 5. Configurar los listeners
         btnSaveSettings.setOnClickListener(v -> saveSettings());
-        // btnClearSettings.setOnClickListener(v -> clearSettings()); // Descomentar y añadir el método
+        // if (btnClearSettings != null) { // Siempre verifica si el botón existe antes de asignar listener
+        //     btnClearSettings.setOnClickListener(v -> clearSettings());
+        // }
     }
 
-    // Este método maneja el clic en el botón de retroceso de la Toolbar
     @Override
     public boolean onSupportNavigateUp() {
         onBackPressed();
         return true;
     }
 
-    // Métodos para el menú de opciones (igual que antes)
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main_menu, menu);
@@ -79,9 +81,6 @@ public class SettingsActivity extends AppCompatActivity {
             return true;
         } else if (id == R.id.action_trips) {
             Toast.makeText(this, "Navegando a Viajes...", Toast.LENGTH_SHORT).show();
-            // Lógica para ir a la pantalla de Viajes
-            // Intent intent = new Intent(this, TripsActivity.class);
-            // startActivity(intent);
             return true;
         } else if (id == R.id.action_settings) {
             Toast.makeText(this, "Ya estás en Configuraciones", Toast.LENGTH_SHORT).show();
@@ -90,19 +89,25 @@ public class SettingsActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    // --- Métodos de interacción con la base de datos ---
-
     private void loadSettings() {
-        EmailConfig config = emailConfigDao.getConfig();
+        Log.d(TAG, "loadSettings: Cargando configuración...");
+        EmailConfig config = emailConfigDao.getConfig(); // Llama al DAO para obtener la configuración
+
         if (config != null) {
+            Log.d(TAG, "loadSettings: Configuración encontrada. Remitente: " + config.getRemitenteEmail() +
+                    ", Destinatarios: " + config.getDestinatariosEmails());
+            // ¡¡¡Verifica que los IDs aquí (R.id.edit_email_remitente, etc.)
+            // coincidan exactamente con los IDs en tu activity_settings.xml!!!
             editEmailRemitente.setText(config.getRemitenteEmail());
-            editAppPassword.setText(config.getAppPassword());
+            editAppPassword.setText(config.getAppPassword()); // ¡Asegúrate que se asigna aquí!
             editEmailsDestino.setText(config.getDestinatariosEmails());
+            Log.d(TAG, "loadSettings: Campos de texto actualizados.");
         } else {
-            // Establecer valores por defecto si no hay configuración guardada
-            editEmailRemitente.setText("alvaradoandy097@gmail.com"); // Valor por defecto del remitente
-            editAppPassword.setText(""); // Clave siempre vacía al cargar si no está en DB
-            editEmailsDestino.setText("andy.alvarado@pbs.group"); // Valor por defecto de destinatario
+            Log.d(TAG, "loadSettings: No se encontró configuración. Estableciendo valores por defecto.");
+            // Esto es importante para el primer inicio o si se borra la configuración
+            editEmailRemitente.setText("alvaradoandy097@gmail.com");
+            editAppPassword.setText(""); // Nunca deberías poner una clave real aquí en el código.
+            editEmailsDestino.setText("andy.alvarado@pbs.group");
         }
     }
 
@@ -113,30 +118,39 @@ public class SettingsActivity extends AppCompatActivity {
 
         if (TextUtils.isEmpty(remitenteEmail) || TextUtils.isEmpty(appPassword) || TextUtils.isEmpty(destinatariosEmails)) {
             Toast.makeText(this, "Todos los campos son obligatorios", Toast.LENGTH_SHORT).show();
+            Log.w(TAG, "saveSettings: Campos vacíos detectados.");
             return;
         }
 
         EmailConfig config = new EmailConfig(remitenteEmail, appPassword, destinatariosEmails);
-        long result = emailConfigDao.saveOrUpdateConfig(config); // Guardar/actualizar en la DB
+        long result = emailConfigDao.saveOrUpdateConfig(config);
 
         if (result != -1) {
             Toast.makeText(this, "Configuración guardada correctamente", Toast.LENGTH_SHORT).show();
-            // finish(); // Considera si quieres cerrar la actividad automáticamente o no
+            Log.d(TAG, "saveSettings: Configuración guardada con éxito. ID: " + result);
+            // Recargar configuración para verificar
+            loadSettings();
+            // Aquí puedes comentar finish() para hacer pruebas
+            // finish();
         } else {
             Toast.makeText(this, "Error al guardar la configuración", Toast.LENGTH_SHORT).show();
+            Log.e(TAG, "saveSettings: Error al guardar la configuración.");
         }
     }
 
-    // Opcional: Método para borrar la configuración (añade un botón en el XML si lo usas)
+    // Opcional: Método para borrar la configuración
     private void clearSettings() {
+        Log.d(TAG, "clearSettings: Borrando configuración...");
         int deletedRows = emailConfigDao.deleteConfig();
         if (deletedRows > 0) {
             Toast.makeText(this, "Configuración borrada", Toast.LENGTH_SHORT).show();
+            Log.d(TAG, "clearSettings: Filas borradas: " + deletedRows);
             editEmailRemitente.setText("");
             editAppPassword.setText("");
             editEmailsDestino.setText("");
         } else {
             Toast.makeText(this, "No hay configuración para borrar", Toast.LENGTH_SHORT).show();
+            Log.d(TAG, "clearSettings: No se encontró configuración para borrar.");
         }
     }
 }

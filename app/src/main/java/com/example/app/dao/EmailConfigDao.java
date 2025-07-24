@@ -21,40 +21,29 @@ public class EmailConfigDao {
     public long saveOrUpdateConfig(EmailConfig config) {
         SQLiteDatabase db = dbHelper.getWritableDatabase();
 
-        // Primero intenta leer la configuración existente (solo debería haber una)
-        EmailConfig existingConfig = getConfig();
-        long newRowId = -1;
+        ContentValues values = new ContentValues();
+        values.put(EmailConfigContract.EmailConfigEntry._ID, 1); // ID fijo
+        values.put(EmailConfigContract.EmailConfigEntry.COLUMN_NAME_REMITENTE_EMAIL, config.getRemitenteEmail());
+        values.put(EmailConfigContract.EmailConfigEntry.COLUMN_NAME_APP_PASSWORD, config.getAppPassword());
+        values.put(EmailConfigContract.EmailConfigEntry.COLUMN_NAME_DESTINATARIOS_EMAILS, config.getDestinatariosEmails());
 
-        if (existingConfig != null) { // Si ya existe, actualiza
-            ContentValues values = new ContentValues();
-            values.put(EmailConfigContract.EmailConfigEntry.COLUMN_NAME_REMITENTE_EMAIL, config.getRemitenteEmail());
-            values.put(EmailConfigContract.EmailConfigEntry.COLUMN_NAME_APP_PASSWORD, config.getAppPassword());
-            values.put(EmailConfigContract.EmailConfigEntry.COLUMN_NAME_DESTINATARIOS_EMAILS, config.getDestinatariosEmails());
+        // Intentar actualizar primero la fila con _ID = 1
+        int rowsUpdated = db.update(
+                EmailConfigContract.EmailConfigEntry.TABLE_NAME,
+                values,
+                EmailConfigContract.EmailConfigEntry._ID + " = ?",
+                new String[]{"1"});
 
-            String selection = EmailConfigContract.EmailConfigEntry._ID + " = ?";
-            String[] selectionArgs = { String.valueOf(existingConfig.getId()) };
-
-            int count = db.update(
-                    EmailConfigContract.EmailConfigEntry.TABLE_NAME,
-                    values,
-                    selection,
-                    selectionArgs);
-
-            if (count > 0) {
-                newRowId = existingConfig.getId(); // Si se actualizó, devuelve el ID existente
-            }
-
-        } else { // Si no existe, inserta
-            ContentValues values = new ContentValues();
-            values.put(EmailConfigContract.EmailConfigEntry.COLUMN_NAME_REMITENTE_EMAIL, config.getRemitenteEmail());
-            values.put(EmailConfigContract.EmailConfigEntry.COLUMN_NAME_APP_PASSWORD, config.getAppPassword());
-            values.put(EmailConfigContract.EmailConfigEntry.COLUMN_NAME_DESTINATARIOS_EMAILS, config.getDestinatariosEmails());
-
-            newRowId = db.insert(EmailConfigContract.EmailConfigEntry.TABLE_NAME, null, values);
+        long id;
+        if (rowsUpdated == 0) {
+            // No existía la fila, insertar con _ID = 1
+            id = db.insert(EmailConfigContract.EmailConfigEntry.TABLE_NAME, null, values);
+        } else {
+            id = 1;
         }
 
         db.close();
-        return newRowId; // Devuelve el ID de la fila insertada/actualizada
+        return id; // Retorna el ID fijo 1 si fue exitoso, o -1 si falló el insert
     }
 
     // Método para obtener la única configuración (asumimos solo una fila)
