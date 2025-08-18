@@ -106,6 +106,7 @@ public class MainActivity extends AppCompatActivity {
             limpiarCampos();
         });
 
+
         // Configuración del escáner Honeywell
         AidcManager.create(this, new AidcManager.CreatedCallback() {
             @Override
