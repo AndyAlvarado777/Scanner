@@ -199,7 +199,7 @@ public class MainActivity extends AppCompatActivity {
             TextView tvItemNumber = newItemView.findViewById(R.id.tv_item_number);
             TextView codigoTexto = newItemView.findViewById(R.id.tv_scan_data);
             TextInputEditText cantidadInput = newItemView.findViewById(R.id.et_quantity);
-            Button btnEliminar = newItemView.findViewById(R.id.btn_delete_item); // Botón de eliminar en cada ítem
+            ImageButton btnEliminar = newItemView.findViewById(R.id.btn_delete_item); // Botón de eliminar en cada ítem
 
             codigoTexto.setText(data);
             cantidadInput.setText("1");
