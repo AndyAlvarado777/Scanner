@@ -13,12 +13,16 @@ import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.*;
+
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.example.app.dao.TransportistaDao;
+import com.example.app.model.Transportista;
 import com.google.android.material.textfield.TextInputEditText;
 import com.honeywell.aidc.*;
 
@@ -52,8 +56,10 @@ public class MainActivity extends AppCompatActivity {
     private Button btnClearFields;
     private TextInputEditText editCodigoViaje;
     private TextInputEditText editCodigoDespachador;
-    private TextInputEditText editCodigoTransportista;
-
+    private AutoCompleteTextView autoCompleteTransportista;
+    private TransportistaDao transportistaDao; // Necesitas el DAO para acceder a los datos
+    private List<Transportista> transportistaList; // Para almacenar la lista de transportistas
+    private String selectedTransportistaCode;
     private TextView tvProductosCount;
     private TextView tvCantidadTotal;
 
@@ -88,7 +94,10 @@ public class MainActivity extends AppCompatActivity {
 
         editCodigoViaje = findViewById(R.id.editCodigoViaje);
         editCodigoDespachador = findViewById(R.id.editCodigoDespachador);
-        editCodigoTransportista = findViewById(R.id.editCodigoTransportista);
+        autoCompleteTransportista = findViewById(R.id.autoCompleteTransportista);
+
+        transportistaDao = new TransportistaDao(this);
+        loadTransportistas();
 
         tvProductosCount = findViewById(R.id.tv_productos_count);
         tvCantidadTotal = findViewById(R.id.tv_cantidad_total);
@@ -164,6 +173,12 @@ public class MainActivity extends AppCompatActivity {
 
         if (id == R.id.action_settings) {
             Intent intent = new Intent(this, SettingsActivity.class);
+            startActivity(intent);
+            return true;
+        }
+        else if (id == R.id.action_transportistas) { // <-- ¡Aquí está la nueva lógica!
+            // Creamos un Intent para navegar a la nueva actividad
+            Intent intent = new Intent(this, TransportistasActivity.class);
             startActivity(intent);
             return true;
         }
@@ -270,8 +285,12 @@ public class MainActivity extends AppCompatActivity {
 
         String codigoViaje = editCodigoViaje.getText().toString().trim();
         String codigoDespachador = editCodigoDespachador.getText().toString().trim();
-        String codigoTransportista = editCodigoTransportista.getText().toString().trim();
+        String codigoTransportista = selectedTransportistaCode;
 
+        if (TextUtils.isEmpty(codigoTransportista)) {
+            Toast.makeText(this, "Por favor, seleccione un transportista de la lista.", Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (codigoViaje.isEmpty() || codigoDespachador.isEmpty() || codigoTransportista.isEmpty()) {
             Toast.makeText(this, "Ingrese todos los datos: viaje, despachador y transportista", Toast.LENGTH_SHORT).show();
             return;
@@ -376,13 +395,66 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void loadTransportistas() {
+        transportistaList = transportistaDao.getAllTransportistas();
+
+        // Crear una lista de solo nombres para mostrar en el AutoCompleteTextView
+        List<String> nombresTransportistas = new ArrayList<>();
+        for (Transportista t : transportistaList) {
+            nombresTransportistas.add(t.getNombreTransportista());
+        }
+
+        // Configurar el ArrayAdapter para el AutoCompleteTextView
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, nombresTransportistas);
+        autoCompleteTransportista.setAdapter(adapter);
+
+        // Manejar la selección del usuario
+        autoCompleteTransportista.setOnItemClickListener((parent, view, position, id) -> {
+            String selectedName = (String) parent.getItemAtPosition(position);
+            // Buscar el código del transportista seleccionado
+            for (Transportista t : transportistaList) {
+                if (t.getNombreTransportista().equals(selectedName)) {
+                    selectedTransportistaCode = t.getCodigoTransportista();
+                    Log.d("MainActivity", "Transportista seleccionado: " + selectedName + ", Código: " + selectedTransportistaCode);
+                    break;
+                }
+            }
+        });
+    }
+
     /**
      * Nuevo método para limpiar los campos de texto y la lista de escaneos.
      */
+    // Código en com.example.app/MainActivity.java
+
+    /**
+     * Muestra un diálogo de confirmación antes de limpiar los campos.
+     */
     private void limpiarCampos() {
+        new AlertDialog.Builder(this)
+                .setTitle("Limpiar Campos")
+                .setMessage("¿Estás seguro de que quieres borrar todos los datos de la pantalla?")
+                .setPositiveButton("Sí, limpiar", (dialog, which) -> {
+                    // El usuario hizo clic en "Sí, limpiar". Procedemos a la limpieza.
+                    realizarLimpiezaDeCampos();
+                })
+                .setNegativeButton("Cancelar", (dialog, which) -> {
+                    // El usuario canceló la acción. No hacemos nada.
+                    dialog.dismiss();
+                })
+                .show();
+    }
+
+    /**
+     * Nuevo método privado que contiene la lógica real de limpieza.
+     * Se llama solo después de la confirmación del usuario.
+     */
+    private void realizarLimpiezaDeCampos() {
+        // Aquí se mueve la lógica de limpieza que ya tenías
         editCodigoViaje.setText("");
         editCodigoDespachador.setText("");
-        editCodigoTransportista.setText("");
+        autoCompleteTransportista.setText(""); // Limpia el campo
+        selectedTransportistaCode = null; // Reinicia la variable de código
 
         scannedItemViews.clear();
         scanContainer.removeAllViews();

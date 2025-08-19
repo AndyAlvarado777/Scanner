@@ -87,26 +87,21 @@
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/til_transportista"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
                     android:hint="Transportista"
-                    android:textColorHint="#808080"
-                    app:boxStrokeColor="#424D6F"
-                    app:hintTextColor="#424D6F"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/tv_info_viaje_title">
 
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/editCodigoTransportista"
+                    <AutoCompleteTextView
+                        android:id="@+id/autoCompleteTransportista"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="textPersonName"
-                        android:maxLines="1"
-                        android:textColor="#333333"
-                        android:background="@android:color/transparent"/>
+                        android:inputType="none"
+                        tools:ignore="LabelFor" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
