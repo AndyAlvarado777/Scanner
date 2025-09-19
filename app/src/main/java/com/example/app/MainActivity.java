@@ -27,6 +27,8 @@ import com.example.app.DespachadorActivity;
 import com.example.app.dao.TransportistaDao;
 import com.example.app.model.Despachador;
 import com.example.app.model.Transportista;
+import com.example.app.dao.ProductoDao; // <-- AÑADE ESTE IMPORT
+import com.example.app.model.Producto;   // <-- AÑADE ESTE IMPORT
 import com.google.android.material.textfield.TextInputEditText;
 import com.honeywell.aidc.*;
 
@@ -78,6 +80,8 @@ public class MainActivity extends AppCompatActivity {
     private AidcManager manager;
     private BarcodeReader barcodeReader;
 
+    private ProductoDao productoDao;
+
     private Map<String, View> scannedItemViews = new LinkedHashMap<>(); // Mantener el orden
 
     // Clase interna para representar un escaneo
@@ -113,6 +117,8 @@ public class MainActivity extends AppCompatActivity {
 
         transportistaDao = new TransportistaDao(this);
         loadTransportistas();
+
+        productoDao = new ProductoDao(this);
 
         tvProductosCount = findViewById(R.id.tv_productos_count);
         tvCantidadTotal = findViewById(R.id.tv_cantidad_total);
@@ -210,40 +216,68 @@ public class MainActivity extends AppCompatActivity {
     }
 
     // Método para añadir o actualizar un elemento escaneado en la UI
-    private void agregarBloqueEscaneo(String data) {
-        if (scannedItemViews.containsKey(data)) {
-            // El código ya existe, actualiza su cantidad
-            View existingItemView = scannedItemViews.get(data);
+    // 3. REEMPLAZA TU MÉTODO agregarBloqueEscaneo CON ESTA NUEVA VERSIÓN MEJORADA
+    private void agregarBloqueEscaneo(String scannedData) {
+        // Lógica de traducción de código
+        Producto productoMapeado = productoDao.findProductoByProveedorCodigo(scannedData);
+
+        final String codigoFinal; // El código que se usará para la lógica y el guardado
+        final String textoAMostrar; // El texto que verá el usuario en la UI
+
+        if (productoMapeado != null) {
+            // Se encontró una correspondencia
+            codigoFinal = productoMapeado.getCodigoInterno();
+            // Para mejor UX, mostramos ambos códigos
+            textoAMostrar = codigoFinal + " (scan: " + scannedData + ")";
+            Toast.makeText(this, "Código traducido", Toast.LENGTH_SHORT).show();
+        } else {
+            // No se encontró correspondencia, usamos el código original
+            codigoFinal = scannedData;
+            textoAMostrar = scannedData;
+        }
+
+        // Usamos el 'codigoFinal' como clave para evitar duplicados del producto ya traducido
+        if (scannedItemViews.containsKey(codigoFinal)) {
+            // El producto ya existe en la lista, actualiza su cantidad
+            View existingItemView = scannedItemViews.get(codigoFinal);
             TextInputEditText cantidadInput = existingItemView.findViewById(R.id.et_quantity);
             if (cantidadInput != null) {
                 try {
                     int currentQuantity = Integer.parseInt(cantidadInput.getText().toString());
                     cantidadInput.setText(String.valueOf(currentQuantity + 1));
                     cantidadInput.requestFocus();
-                    Toast.makeText(this, "Cantidad actualizada para: " + data, Toast.LENGTH_SHORT).show();
                 } catch (NumberFormatException e) {
-                    Log.e(TAG, "Error al parsear cantidad existente: " + cantidadInput.getText().toString());
                     cantidadInput.setText("1");
                 }
             }
         } else {
-            // El código no existe, crea un nuevo ítem
+            // El producto no existe, crea un nuevo ítem
             LayoutInflater inflater = LayoutInflater.from(this);
-            // Asegúrate de que tienes un layout llamado 'item_scan.xml' para cada elemento escaneado
-            // con tv_item_number, tv_scan_data, et_quantity, btn_delete_item
             View newItemView = inflater.inflate(R.layout.item_scan, scanContainer, false);
 
-            TextView tvItemNumber = newItemView.findViewById(R.id.tv_item_number);
             TextView codigoTexto = newItemView.findViewById(R.id.tv_scan_data);
             TextInputEditText cantidadInput = newItemView.findViewById(R.id.et_quantity);
-            ImageButton btnEliminar = newItemView.findViewById(R.id.btn_delete_item); // Botón de eliminar en cada ítem
+            ImageButton btnEliminar = newItemView.findViewById(R.id.btn_delete_item);
 
-            codigoTexto.setText(data);
+            codigoTexto.setText(textoAMostrar); // Mostramos el texto formateado
             cantidadInput.setText("1");
 
-            scannedItemViews.put(data, newItemView); // Almacena la vista del nuevo ítem
+            // IMPORTANTE: Guardamos el 'codigoFinal' en el tag para poder borrarlo correctamente
+            newItemView.setTag(codigoFinal);
+            scannedItemViews.put(codigoFinal, newItemView);
 
-            // Listener para actualizar cantidad al editar manualmente
+            // Listener para el botón de eliminar por ítem
+            btnEliminar.setOnClickListener(v -> {
+                String codeToDelete = (String) newItemView.getTag(); // Obtenemos el código del tag
+                if (codeToDelete != null) {
+                    scannedItemViews.remove(codeToDelete);
+                    scanContainer.removeView(newItemView);
+                    updateCounters();
+                    Toast.makeText(this, "Elemento eliminado: " + codeToDelete, Toast.LENGTH_SHORT).show();
+                }
+            });
+
+            // ... (tus otros listeners para cantidadInput no cambian)
             cantidadInput.setOnEditorActionListener((v, actionId, event) -> {
                 if (actionId == EditorInfo.IME_ACTION_DONE) {
                     cantidadInput.clearFocus();
@@ -263,21 +297,11 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
 
-            // Listener para el botón de eliminar por ítem
-            btnEliminar.setOnClickListener(v -> {
-                // Obtener el código de barra asociado a esta vista
-                String codeToDelete = codigoTexto.getText().toString();
-                scannedItemViews.remove(codeToDelete); // Eliminar del mapa
-                scanContainer.removeView(newItemView); // Eliminar de la UI
-                updateCounters(); // Recalcular y actualizar contadores
-                Toast.makeText(this, "Elemento eliminado: " + codeToDelete, Toast.LENGTH_SHORT).show();
-            });
 
-
-            scanContainer.addView(newItemView); // Añade el nuevo ítem al final
+            scanContainer.addView(newItemView);
         }
 
-        // Asegurar que el ScrollView se desplace al final
+        // ... (tu código para hacer scroll y actualizar contadores no cambia)
         scanContainer.post(() -> {
             View parent = (View) scanContainer.getParent();
             if (parent instanceof ScrollView) {
@@ -286,7 +310,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        updateCounters(); // Siempre actualiza los contadores
+        updateCounters();
     }
 
     // Método para exportar a Excel y enviar correo
@@ -324,12 +348,12 @@ public class MainActivity extends AppCompatActivity {
         // Recopila los datos de la UI en una lista temporal para la exportación.
         List<Escaneo> datosParaExportar = new ArrayList<>();
         for (Map.Entry<String, View> entry : scannedItemViews.entrySet()) {
+            // La clave del mapa ('entry.getKey()') es ahora nuestro 'codigoFinal' limpio.
+            String codigoBarra = entry.getKey();
             View fila = entry.getValue();
-            TextView codigoView = fila.findViewById(R.id.tv_scan_data);
             TextInputEditText cantidadView = fila.findViewById(R.id.et_quantity);
 
-            if (codigoView != null && cantidadView != null) {
-                String codigoBarra = codigoView.getText().toString().trim();
+            if (cantidadView != null) {
                 String cantidadStr = cantidadView.getText().toString().trim();
                 int cantidad = 0;
                 try {

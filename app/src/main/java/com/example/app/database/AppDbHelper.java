@@ -12,7 +12,7 @@ import java.io.InputStreamReader;
 
 public class AppDbHelper extends SQLiteOpenHelper {
     // Incrementa la versión si la base de datos ya existía sin los datos precargados
-    public static final int DATABASE_VERSION = 4;
+    public static final int DATABASE_VERSION = 5;
     public static final String DATABASE_NAME = "AppDatabase.db";
 
     // --- Sentencias SQL para crear las tablas (sin cambios) ---
@@ -37,6 +37,13 @@ public class AppDbHelper extends SQLiteOpenHelper {
                     DespachadorContract.DespachadorEntry.COLUMN_NAME_EMPRESA + " TEXT," +
                     DespachadorContract.DespachadorEntry.COLUMN_NAME_NOMBRE + " TEXT)";
 
+    // 2. AÑADE LA SENTENCIA SQL PARA CREAR LA NUEVA TABLA
+    private static final String SQL_CREATE_PRODUCTOS_ENTRIES =
+            "CREATE TABLE " + ProductoContract.ProductoEntry.TABLE_NAME + " (" +
+                    ProductoContract.ProductoEntry.COLUMN_NAME_CODIGO_PROVEEDOR + " TEXT PRIMARY KEY," + // Clave primaria para búsquedas rápidas
+                    ProductoContract.ProductoEntry.COLUMN_NAME_CODIGO_INTERNO + " TEXT NOT NULL)";
+
+
     // ✅ Variable para el Context, necesaria para leer 'assets'
     private final Context context;
 
@@ -52,6 +59,7 @@ public class AppDbHelper extends SQLiteOpenHelper {
         db.execSQL(SQL_CREATE_EMAIL_ENTRIES);
         db.execSQL(SQL_CREATE_TRANSPORTISTA_ENTRIES);
         db.execSQL(SQL_CREATE_DESPACHADOR_ENTRIES);
+        db.execSQL(SQL_CREATE_PRODUCTOS_ENTRIES);
 
         // 2. Precargar los datos usando una transacción para eficiencia
         db.beginTransaction();
@@ -59,6 +67,7 @@ public class AppDbHelper extends SQLiteOpenHelper {
             Log.d("AppDbHelper", "Iniciando carga de datos iniciales (seeding)...");
             seedTransportistas(db);
             seedDespachadores(db);
+            seedProductos(db);
             db.setTransactionSuccessful(); // Marcar la transacción como exitosa
             Log.d("AppDbHelper", "Carga de datos iniciales finalizada con éxito.");
         } catch (Exception e) {
@@ -116,6 +125,30 @@ public class AppDbHelper extends SQLiteOpenHelper {
         }
     }
 
+    // 5. AÑADE EL NUEVO MÉTODO PARA CARGAR LOS DATOS DE PRODUCTOS
+    /**
+     * Lee mapeo_productos.csv de 'assets' e inserta los datos en la base de datos.
+     */
+    private void seedProductos(SQLiteDatabase db) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(context.getAssets().open("mapeo_productos.csv")))) {
+            reader.readLine(); // Omitir la línea de cabecera si existe
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] columns = line.split(",");
+                if (columns.length < 2) continue; // Necesitamos al menos 2 columnas
+
+                ContentValues values = new ContentValues();
+                values.put(ProductoContract.ProductoEntry.COLUMN_NAME_CODIGO_PROVEEDOR, columns[0].trim());
+                values.put(ProductoContract.ProductoEntry.COLUMN_NAME_CODIGO_INTERNO, columns[1].trim());
+
+                db.insertWithOnConflict(ProductoContract.ProductoEntry.TABLE_NAME, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+            }
+            Log.d("AppDbHelper", "Datos de mapeo de productos cargados.");
+        } catch (IOException e) {
+            Log.e("AppDbHelper", "Error al leer mapeo_productos.csv", e);
+        }
+    }
+
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         Log.w("AppDbHelper", "Actualizando base de datos de v" + oldVersion + " a v" + newVersion + ". Se borrarán los datos antiguos.");
@@ -123,6 +156,7 @@ public class AppDbHelper extends SQLiteOpenHelper {
         db.execSQL("DROP TABLE IF EXISTS " + EmailConfigContract.EmailConfigEntry.TABLE_NAME);
         db.execSQL("DROP TABLE IF EXISTS " + TransportistaContract.TransportistaEntry.TABLE_NAME);
         db.execSQL("DROP TABLE IF EXISTS " + DespachadorContract.DespachadorEntry.TABLE_NAME);
+        db.execSQL("DROP TABLE IF EXISTS " + ProductoContract.ProductoEntry.TABLE_NAME);
         // Vuelve a crear la base de datos (y carga los datos de nuevo)
         onCreate(db);
     }
