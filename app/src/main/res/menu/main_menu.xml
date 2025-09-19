@@ -13,4 +13,14 @@
         android:icon="@drawable/apps"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/action_transportistas"
+        android:title="Transportistas"
+        app:showAsAction="never"/>
+
+    <item
+        android:id="@+id/action_despachadores"
+        android:title="Despachadores"
+        app:showAsAction="never"/>
+
 </menu>

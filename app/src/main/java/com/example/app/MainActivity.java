@@ -13,12 +13,20 @@ import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.*;
+
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.example.app.dao.DespachadorDao;
+import com.example.app.DespachadorActivity;
+import com.example.app.dao.TransportistaDao;
+import com.example.app.model.Despachador;
+import com.example.app.model.Transportista;
 import com.google.android.material.textfield.TextInputEditText;
 import com.honeywell.aidc.*;
 
@@ -47,13 +55,23 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "HoneywellScanner";
     private static final int PERMISSION_REQUEST_CODE = 123;
 
+    private static final int GESTIONAR_DESPACHADORES_REQUEST = 1;
+    private static final int GESTIONAR_TRANSPORTISTAS_REQUEST = 2;
+
     private LinearLayout scanContainer;
     private Button btnExportar;
     private Button btnClearFields;
     private TextInputEditText editCodigoViaje;
-    private TextInputEditText editCodigoDespachador;
-    private TextInputEditText editCodigoTransportista;
+    private AutoCompleteTextView autoCompleteDespachador;
+    private DespachadorDao despachadorDao;
+    private List<Despachador> despachadorList;
+    private String selectedDespachadorCode;
+    private AutoCompleteTextView autoCompleteTransportista;
+    private TransportistaDao transportistaDao; // Necesitas el DAO para acceder a los datos
 
+    private List<Transportista> transportistaList; // Para almacenar la lista de transportistas
+
+    private String selectedTransportistaCode;
     private TextView tvProductosCount;
     private TextView tvCantidadTotal;
 
@@ -87,8 +105,14 @@ public class MainActivity extends AppCompatActivity {
         btnClearFields = findViewById(R.id.btnClearFields);
 
         editCodigoViaje = findViewById(R.id.editCodigoViaje);
-        editCodigoDespachador = findViewById(R.id.editCodigoDespachador);
-        editCodigoTransportista = findViewById(R.id.editCodigoTransportista);
+        autoCompleteDespachador = findViewById(R.id.autoCompleteDespachador);
+        autoCompleteTransportista = findViewById(R.id.autoCompleteTransportista);
+
+        despachadorDao = new DespachadorDao(this);
+        loadDespachadores();
+
+        transportistaDao = new TransportistaDao(this);
+        loadTransportistas();
 
         tvProductosCount = findViewById(R.id.tv_productos_count);
         tvCantidadTotal = findViewById(R.id.tv_cantidad_total);
@@ -105,6 +129,7 @@ public class MainActivity extends AppCompatActivity {
         btnClearFields.setOnClickListener(v -> {
             limpiarCampos();
         });
+
 
         // Configuración del escáner Honeywell
         AidcManager.create(this, new AidcManager.CreatedCallback() {
@@ -164,6 +189,18 @@ public class MainActivity extends AppCompatActivity {
         if (id == R.id.action_settings) {
             Intent intent = new Intent(this, SettingsActivity.class);
             startActivity(intent);
+            return true;
+        }
+        else if (id == R.id.action_transportistas) { // <-- ¡Aquí está la nueva lógica!
+            // Creamos un Intent para navegar a la nueva actividad
+            Intent intent = new Intent(this, TransportistasActivity.class); // Asumo que se llama así
+            startActivityForResult(intent, GESTIONAR_TRANSPORTISTAS_REQUEST);
+            return true;
+        }
+        else if (id == R.id.action_despachadores) {
+            // Creamos un Intent para navegar a la nueva actividad
+            Intent intent = new Intent(this, DespachadorActivity.class);
+            startActivityForResult(intent, GESTIONAR_DESPACHADORES_REQUEST);
             return true;
         }
         // Si tuvieras más ítems en main_menu.xml, los manejarías aquí.
@@ -268,9 +305,17 @@ public class MainActivity extends AppCompatActivity {
         }
 
         String codigoViaje = editCodigoViaje.getText().toString().trim();
-        String codigoDespachador = editCodigoDespachador.getText().toString().trim();
-        String codigoTransportista = editCodigoTransportista.getText().toString().trim();
+        String codigoDespachador = selectedDespachadorCode;
+        String codigoTransportista = selectedTransportistaCode;
 
+        if (TextUtils.isEmpty(codigoDespachador)) {
+            Toast.makeText(this, "Por favor, seleccione un despachador de la lista.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (TextUtils.isEmpty(codigoTransportista)) {
+            Toast.makeText(this, "Por favor, seleccione un transportista de la lista.", Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (codigoViaje.isEmpty() || codigoDespachador.isEmpty() || codigoTransportista.isEmpty()) {
             Toast.makeText(this, "Ingrese todos los datos: viaje, despachador y transportista", Toast.LENGTH_SHORT).show();
             return;
@@ -375,13 +420,118 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void loadTransportistas() {
+        transportistaList = transportistaDao.getAllTransportistas();
+
+        // Crear una lista de solo nombres para mostrar en el AutoCompleteTextView
+        List<String> nombresTransportistas = new ArrayList<>();
+        for (Transportista t : transportistaList) {
+            nombresTransportistas.add(t.getNombreTransportista());
+        }
+
+        // Configurar el ArrayAdapter para el AutoCompleteTextView
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, nombresTransportistas);
+        autoCompleteTransportista.setAdapter(adapter);
+
+        // Manejar la selección del usuario
+        autoCompleteTransportista.setOnItemClickListener((parent, view, position, id) -> {
+            String selectedName = (String) parent.getItemAtPosition(position);
+            // Buscar el código del transportista seleccionado
+            for (Transportista t : transportistaList) {
+                if (t.getNombreTransportista().equals(selectedName)) {
+                    selectedTransportistaCode = t.getCodigoTransportista();
+                    Log.d("MainActivity", "Transportista seleccionado: " + selectedName + ", Código: " + selectedTransportistaCode);
+                    break;
+                }
+            }
+        });
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        // Solo nos interesa si el resultado fue exitoso (RESULT_OK)
+        if (resultCode != RESULT_OK) {
+            return;
+        }
+
+        // Usamos un switch para manejar las diferentes respuestas
+        switch (requestCode) {
+            case GESTIONAR_DESPACHADORES_REQUEST:
+                // El usuario modificó los despachadores, recargamos su lista
+                Toast.makeText(this, "Actualizando lista de despachadores...", Toast.LENGTH_SHORT).show();
+                loadDespachadores();
+                break;
+
+            case GESTIONAR_TRANSPORTISTAS_REQUEST:
+                // ✅ El usuario modificó los transportistas, recargamos su lista
+                Toast.makeText(this, "Actualizando lista de transportistas...", Toast.LENGTH_SHORT).show();
+                loadTransportistas(); // Llama a tu método para cargar transportistas
+                break;
+
+            // Aquí podrías añadir más 'case' en el futuro
+        }
+    }
+    private void loadDespachadores() {
+        despachadorList = despachadorDao.getAllDespachador();
+
+        List<String> nombresDespachadores = new ArrayList<>();
+        for (Despachador d : despachadorList) {
+            nombresDespachadores.add(d.getNombreDespachador());
+        }
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, nombresDespachadores);
+        autoCompleteDespachador.setAdapter(adapter);
+
+        autoCompleteDespachador.setOnItemClickListener((parent, view, position, id) -> {
+            String selectedName = (String) parent.getItemAtPosition(position);
+            for (Despachador d : despachadorList) {
+                if (d.getNombreDespachador().equals(selectedName)) {
+                    selectedDespachadorCode = d.getCodigoDespachador();
+                    Log.d("MainActivity", "Despachador seleccionado: " + selectedName + ", Código: " + selectedDespachadorCode);
+                    break;
+                }
+            }
+        });
+    }
+
     /**
      * Nuevo método para limpiar los campos de texto y la lista de escaneos.
      */
+    // Código en com.example.app/MainActivity.java
+
+    /**
+     * Muestra un diálogo de confirmación antes de limpiar los campos.
+     */
     private void limpiarCampos() {
+        new AlertDialog.Builder(this)
+                .setTitle("Limpiar Campos")
+                .setMessage("¿Estás seguro de que quieres borrar todos los datos de la pantalla?")
+                .setPositiveButton("Sí, limpiar", (dialog, which) -> {
+                    // El usuario hizo clic en "Sí, limpiar". Procedemos a la limpieza.
+                    realizarLimpiezaDeCampos();
+                })
+                .setNegativeButton("Cancelar", (dialog, which) -> {
+                    // El usuario canceló la acción. No hacemos nada.
+                    dialog.dismiss();
+                })
+                .show();
+    }
+
+    /**
+     * Nuevo método privado que contiene la lógica real de limpieza.
+     * Se llama solo después de la confirmación del usuario.
+     */
+    private void realizarLimpiezaDeCampos() {
+        // Aquí se mueve la lógica de limpieza que ya tenías
         editCodigoViaje.setText("");
-        editCodigoDespachador.setText("");
-        editCodigoTransportista.setText("");
+        // Limpia el campo del despachador
+        autoCompleteDespachador.setText("");
+        selectedDespachadorCode = null;
+
+        autoCompleteTransportista.setText(""); // Limpia el campo
+        selectedTransportistaCode = null; // Reinicia la variable de código
 
         scannedItemViews.clear();
         scanContainer.removeAllViews();

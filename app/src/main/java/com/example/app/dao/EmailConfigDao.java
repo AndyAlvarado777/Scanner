@@ -6,15 +6,15 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 
+import com.example.app.database.AppDbHelper;
 import com.example.app.database.EmailConfigContract;
-import com.example.app.database.EmailConfigDbHelper;
 import com.example.app.model.EmailConfig;
 
 public class EmailConfigDao {
-    private EmailConfigDbHelper dbHelper;
+    private AppDbHelper dbHelper;
 
     public EmailConfigDao(Context context) {
-        dbHelper = new EmailConfigDbHelper(context);
+        dbHelper = new AppDbHelper(context);
     }
 
     // Método para guardar (o actualizar si ya existe) la configuración
