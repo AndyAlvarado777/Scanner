@@ -130,28 +130,22 @@
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/til_codigo_despachador"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:hint="Código Despachador"
-                    android:textColorHint="#808080"
-                    app:boxStrokeColor="#424D6F"
-                    app:hintTextColor="#424D6F"
+                    android:hint="Despachador"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/til_codigo_viaje">
 
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/editCodigoDespachador"
+                    <AutoCompleteTextView
+                        android:id="@+id/autoCompleteDespachador"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:inputType="text"
-                        android:maxLines="1"
-                        android:textColor="#333333"
-                        android:background="@android:color/transparent"/>
+                        android:inputType="none"
+                        tools:ignore="LabelFor" />
                 </com.google.android.material.textfield.TextInputLayout>
-
             </androidx.constraintlayout.widget.ConstraintLayout>
         </com.google.android.material.card.MaterialCardView>
 

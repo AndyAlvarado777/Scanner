@@ -22,7 +22,10 @@
         android:theme="@style/Theme.App"
         tools:targetApi="31">
         <activity
-            android:name=".TransportistaDialogFragment"
+            android:name=".DespachadorActivity"
+            android:exported="false" />
+        <activity
+            android:name=".dialog.TransportistaDialogFragment"
             android:exported="false" />
         <activity
             android:name=".TransportistasActivity"

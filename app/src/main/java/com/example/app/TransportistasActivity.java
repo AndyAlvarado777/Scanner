@@ -2,19 +2,17 @@ package com.example.app;
 
 import android.os.Bundle;
 import android.util.Log;
-import android.view.MenuItem;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.app.TransportistaAdapter;
+import com.example.app.adapter.TransportistaAdapter;
 import com.example.app.dao.TransportistaDao;
-import com.example.app.TransportistaDialogFragment;
+import com.example.app.dialog.TransportistaDialogFragment;
 import com.example.app.model.Transportista;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
@@ -26,7 +24,7 @@ public class TransportistasActivity extends AppCompatActivity
         TransportistaAdapter.OnTransportistaInteractionListener {
 
     private static final String TAG = "TransportistasActivity";
-
+    private boolean dataChanged = false;
     private RecyclerView recyclerView;
     private TransportistaAdapter adapter;
     private TransportistaDao transportistaDao;
@@ -64,7 +62,7 @@ public class TransportistasActivity extends AppCompatActivity
 
     @Override
     public boolean onSupportNavigateUp() {
-        onBackPressed();
+        finish();
         return true;
     }
 
@@ -84,6 +82,7 @@ public class TransportistasActivity extends AppCompatActivity
     public void onSaveTransportista(Transportista transportista) {
         long result = transportistaDao.insertTransportista(transportista);
         if (result != -1) {
+            dataChanged = true;
             Toast.makeText(this, "Transportista agregado", Toast.LENGTH_SHORT).show();
             loadTransportistas(); // Recargar la lista
         } else {
@@ -96,6 +95,7 @@ public class TransportistasActivity extends AppCompatActivity
     public void onUpdateTransportista(Transportista transportista) {
         int rowsAffected = transportistaDao.updateTransportista(transportista);
         if (rowsAffected > 0) {
+            dataChanged = true;
             Toast.makeText(this, "Transportista actualizado", Toast.LENGTH_SHORT).show();
             loadTransportistas(); // Recargar la lista
         } else {
@@ -106,6 +106,7 @@ public class TransportistasActivity extends AppCompatActivity
     // Método para manejar el clic en un ítem de la lista (Editar)
     @Override
     public void onEditTransportista(Transportista transportista) {
+
         TransportistaDialogFragment dialog = TransportistaDialogFragment.newInstance(transportista);
         dialog.show(getSupportFragmentManager(), "TransportistaDialogFragment");
     }
@@ -119,6 +120,7 @@ public class TransportistasActivity extends AppCompatActivity
                 .setPositiveButton("Eliminar", (dialog, which) -> {
                     int rowsAffected = transportistaDao.deleteTransportista(transportista.getCodigoTransportista());
                     if (rowsAffected > 0) {
+                        dataChanged = true;
                         Toast.makeText(this, "Transportista eliminado", Toast.LENGTH_SHORT).show();
                         loadTransportistas();
                     } else {
@@ -127,5 +129,15 @@ public class TransportistasActivity extends AppCompatActivity
                 })
                 .setNegativeButton("Cancelar", null)
                 .show();
+    }
+
+    @Override
+    public void finish() {
+        if (dataChanged) {
+            setResult(RESULT_OK); // Hubo cambios
+        } else {
+            setResult(RESULT_CANCELED); // No hubo cambios
+        }
+        super.finish();
     }
 }
