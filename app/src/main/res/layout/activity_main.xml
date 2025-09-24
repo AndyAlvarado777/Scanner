@@ -124,6 +124,8 @@
                         android:layout_height="wrap_content"
                         android:inputType="text"
                         android:maxLines="1"
+                        android:textSize="21sp"
+                        android:textStyle="bold"
                         android:textColor="#333333"
                         android:background="@android:color/transparent"/>
                 </com.google.android.material.textfield.TextInputLayout>

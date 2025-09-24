@@ -380,7 +380,7 @@ public class MainActivity extends AppCompatActivity {
                 dir.mkdirs();
             }
 
-            String fileName = "Escaneos_" + codigoViaje + "_" + System.currentTimeMillis() + ".xls";
+            String fileName = "Escaneos_" + codigoViaje + ".xls";
             archivoExcel = new File(dir, fileName);
 
             WorkbookSettings wbSettings = new WorkbookSettings();
@@ -390,22 +390,22 @@ public class MainActivity extends AppCompatActivity {
             WritableSheet sheet = workbook.createSheet("Escaneos", 0);
 
             // Encabezados
-            sheet.addCell(new Label(0, 0, "Viaje"));
-            sheet.addCell(new Label(1, 0, "Codigo Item"));
-            sheet.addCell(new Label(2, 0, "Serie (default:00000000000000000000)"));
-            sheet.addCell(new Label(3, 0, "Codigo despachador"));
-            sheet.addCell(new Label(4, 0, "Codigo transportista"));
-            sheet.addCell(new Label(5, 0, "Cantidad"));
+            sheet.addCell(new Label(0, 0, "VIAJE"));
+            sheet.addCell(new Label(1, 0, "CODIGO"));
+            sheet.addCell(new Label(2, 0, "EMPLEADO"));
+            sheet.addCell(new Label(3, 0, "TRANSPORTISTA"));
+            sheet.addCell(new Label(4, 0, "CANTIDAD"));
+            sheet.addCell(new Label(5, 0, "OBSERVACION"));
 
             // Datos
             for (int i = 0; i < datosParaExportar.size(); i++) {
                 Escaneo escaneo = datosParaExportar.get(i);
                 sheet.addCell(new Label(0, i + 1, codigoViaje));
                 sheet.addCell(new Label(1, i + 1, escaneo.codigoBarra));
-                sheet.addCell(new Label(2, i + 1, "00000000000000000000"));
-                sheet.addCell(new Label(3, i + 1, codigoDespachador));
-                sheet.addCell(new Label(4, i + 1, codigoTransportista));
-                sheet.addCell(new Label(5, i + 1, String.valueOf(escaneo.cantidad)));
+                sheet.addCell(new Label(2, i + 1, codigoDespachador));
+                sheet.addCell(new Label(3, i + 1, codigoTransportista));
+                sheet.addCell(new Label(4, i + 1, String.valueOf(escaneo.cantidad)));
+                sheet.addCell(new Label(5, i + 1, ""));
             }
 
             workbook.write();
