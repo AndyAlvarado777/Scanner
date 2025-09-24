@@ -257,7 +257,6 @@ public class MainActivity extends AppCompatActivity {
 
             TextView codigoTexto = newItemView.findViewById(R.id.tv_scan_data);
             TextInputEditText cantidadInput = newItemView.findViewById(R.id.et_quantity);
-            ImageButton btnEliminar = newItemView.findViewById(R.id.btn_delete_item);
 
             codigoTexto.setText(textoAMostrar); // Mostramos el texto formateado
             cantidadInput.setText("1");
@@ -266,15 +265,14 @@ public class MainActivity extends AppCompatActivity {
             newItemView.setTag(codigoFinal);
             scannedItemViews.put(codigoFinal, newItemView);
 
-            // Listener para el botón de eliminar por ítem
-            btnEliminar.setOnClickListener(v -> {
-                String codeToDelete = (String) newItemView.getTag(); // Obtenemos el código del tag
-                if (codeToDelete != null) {
-                    scannedItemViews.remove(codeToDelete);
-                    scanContainer.removeView(newItemView);
-                    updateCounters();
-                    Toast.makeText(this, "Elemento eliminado: " + codeToDelete, Toast.LENGTH_SHORT).show();
-                }
+            // --- NUEVA LÓGICA DE LISTENERS DE PRESIÓN ---
+// Listener para una pulsación normal (editar)
+            newItemView.setOnClickListener(v -> showEditDialog(codigoFinal, codigoTexto, cantidadInput));
+
+// Listener para una pulsación larga (eliminar)
+            newItemView.setOnLongClickListener(v -> {
+                showDeleteConfirmationDialog(newItemView, codigoFinal);
+                return true; // Retorna true para consumir el evento y evitar el click normal
             });
 
             // ... (tus otros listeners para cantidadInput no cambian)
@@ -563,6 +561,56 @@ public class MainActivity extends AppCompatActivity {
         updateCounters();
 
         Toast.makeText(this, "Campos limpiados correctamente", Toast.LENGTH_SHORT).show();
+    }
+
+    private void showDeleteConfirmationDialog(View itemView, String codeToDelete) {
+        new AlertDialog.Builder(this)
+                .setTitle("Eliminar elemento")
+                .setMessage("¿Estás seguro de que quieres eliminar el código " + codeToDelete + "?")
+                .setPositiveButton("Sí, eliminar", (dialog, which) -> {
+                    scannedItemViews.remove(codeToDelete);
+                    scanContainer.removeView(itemView);
+                    updateCounters();
+                    Toast.makeText(this, "Elemento eliminado: " + codeToDelete, Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancelar", (dialog, which) -> dialog.dismiss())
+                .show();
+    }
+
+    private void showEditDialog(String oldCode, TextView tvScanData, TextInputEditText etQuantity) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        LayoutInflater inflater = this.getLayoutInflater();
+        View dialogView = inflater.inflate(R.layout.dialog_edit_code, null);
+        builder.setView(dialogView);
+
+        final TextInputEditText etEditCode = dialogView.findViewById(R.id.et_edit_code);
+        etEditCode.setText(oldCode); // Muestra el código actual
+
+        builder.setPositiveButton("Editar", (dialog, which) -> {
+            String newCode = etEditCode.getText().toString().trim();
+            if (!newCode.isEmpty() && !newCode.equals(oldCode)) {
+                // Eliminar el viejo ítem
+                scannedItemViews.remove(oldCode);
+                // Actualizar la vista con el nuevo código
+                tvScanData.setText(newCode);
+
+                // Re-mapear el nuevo código en scannedItemViews
+                View cardView = (View) tvScanData.getParent().getParent(); // Obtiene la MaterialCardView
+                cardView.setTag(newCode); // Actualiza el tag
+                scannedItemViews.put(newCode, cardView); // Re-agrega con la nueva clave
+
+                // Opcional: enfocar el input de cantidad
+                etQuantity.requestFocus();
+                // Mostrar un Toast o SnackBar
+                Toast.makeText(this, "Código actualizado a: " + newCode, Toast.LENGTH_SHORT).show();
+            } else if (newCode.equals(oldCode)) {
+                Toast.makeText(this, "El código no ha cambiado.", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "El código no puede estar vacío.", Toast.LENGTH_SHORT).show();
+            }
+        });
+        builder.setNegativeButton("Cancelar", (dialog, which) -> dialog.dismiss());
+        builder.show();
     }
 
     /**
